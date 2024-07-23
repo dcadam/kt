@@ -4,16 +4,14 @@ library(tidyverse)
 library(scales)
 library(cowplot)
 library(data.table)
-library(ggprism)
 
+##read data 
+epicurve <- read_csv(file = "data/hk/hk-epicurves.csv")
+rtk <- read_csv(file = "data/hk/hk-Rt-kt.csv")
+epinow <- read_csv(file = "data/hk/hk-epinow2.csv")
 
-##read processed data 
-epicurve <- read_csv(file = "code/empirical/processed/epicurve.csv")
-rtk <- read_csv(file = "code/empirical/processed/rtk_smooth.csv")
-epinow <- read_csv(file = "code/empirical/processed/epinow2.csv")
-
-COVID <- read_rds(file = "code/empirical/finished scripts/data/covid_dated_offspring.rds")
-SARS <- read_rds(file = "code/empirical/finished scripts/data/sars_dated_offspring.rds")
+COVID <- read_rds(file = "data/hk/rds/covid_dated_offspring.rds")
+SARS <- read_rds(file = "data/hk/rds/sars_dated_offspring.rds")
 
 offspring <- list(COVID[[1]], COVID[[2]], SARS[[1]], SARS[[2]])
 offspring_names <- c(names(COVID), names(SARS))
@@ -21,11 +19,11 @@ names(offspring) <- offspring_names
 
 
 pal <- RColorBrewer::brewer.pal(12, "Paired") # palette for plots
-figure_1 <- list() #empty list for grip
-
 pal_epi <- RColorBrewer::brewer.pal(9, "BuGn") # palette for plots
 
+figure_1 <- list() #empty list for grip
 
+## Fig.1a
 pA <- epicurve |> (function(x) {
   ggplot(x) +
     geom_histogram(aes(x = t, fill = sse_case_classification),
@@ -33,8 +31,6 @@ pA <- epicurve |> (function(x) {
                    linewidth = 0.3,
                    binwidth = 3
     ) +
-    # geom_line(data = covid_incidence_ct_l, 
-    #           aes(x = t, y = confirm_t))+
     geom_hline(yintercept = 1, linetype = 2, alpha = 0) +
     scale_x_date("Symptom onset date",
                  date_breaks = "1 month",
@@ -49,7 +45,6 @@ pA <- epicurve |> (function(x) {
     theme_classic() +
     theme(aspect.ratio = 0.75,
           legend.position = "bottom",
-          # legend.justification = 'left',
           strip.background = element_blank(),
           strip.placement = "outside",
           legend.text = element_text(hjust = 0),
@@ -62,9 +57,7 @@ pA <- epicurve |> (function(x) {
   
 })()
 
-pA
-
-
+## Fig.1b
 pB <- map2(offspring, offspring_names, function(x, y) {
   
   x |> 
@@ -93,7 +86,6 @@ pB <- map2(offspring, offspring_names, function(x, y) {
         theme_classic() +
         theme(aspect.ratio = 0.75,
               legend.position = "bottom",
-              # legend.justification = 'left',
               strip.background = element_blank(),
               strip.placement = "outside",
               legend.text = element_text(hjust = 0),
@@ -106,11 +98,11 @@ pB <- map2(offspring, offspring_names, function(x, y) {
              x = expression(paste("Number of secondary cases, ", italic(Z))), 
              y = "Proportion of secondary cases") +
       coord_cartesian(expand = TRUE) +
-        # guides(y = "prism_offset") +
         facet_wrap(~period, ncol = 4, scales = "free")
       
     }) ()
 
+## Fig.1c
 pC <- rtk |> (function(x) {
   align_df <- bind_rows(
     epicurve |>
@@ -147,7 +139,6 @@ pC <- rtk |> (function(x) {
     theme_classic() +
     theme(aspect.ratio = 0.75,
           legend.position = "bottom",
-          # legend.justification = 'left',
           strip.background = element_blank(),
           strip.placement = "outside",
           legend.text = element_text(hjust = 0),
@@ -174,6 +165,7 @@ pC <- rtk |> (function(x) {
     )
 })()
 
+## Fig.1d
 pD <- rtk |> (function(x) {
   align_df <- bind_rows(
     epicurve |>
@@ -209,7 +201,6 @@ pD <- rtk |> (function(x) {
     theme_classic() +
     theme(aspect.ratio = 0.75,
           legend.position = "bottom",
-          # legend.justification = 'left',
           strip.background = element_blank(),
           strip.placement = "outside",
           legend.text = element_text(hjust = 0),
@@ -227,10 +218,8 @@ pD <- rtk |> (function(x) {
     scale_fill_manual(values = c(pal[2], pal[1]), labels = c("Primary", "Sensitivity"))
 })()
 
-
-
-
+# save Fig.1
 p1 <- plot_grid(pA, pB, pC, pD, labels = "auto", ncol = 1, align = "hv", axis = "b")
 
-save_plot(plot = p1, filename = "plots/Fig.1.pdf", base_height = 13, base_width = 13)
+save_plot(plot = p1, filename = "plots/Fig.1.png", base_height = 13, base_width = 13, dpi = 600)
 

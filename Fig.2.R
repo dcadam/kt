@@ -7,55 +7,17 @@ library(zoo)
 library(ggprism)
 library(data.table)
 library(scales)
-
-source('code/simulations/util.R')
-
+  
+source("src/util.R")
 
 ##read processed data
-rtk <- read_csv(file = "code/empirical/processed/rtk_smooth.csv")
-epinow <- read_csv(file = "code/empirical/processed/epinow2.csv")
-npi <- read_csv(file = "code/empirical/processed/npi_gr.csv")
-epicurve <- read_csv(file = "code/empirical/processed/epicurve.csv")
+rtk <- read_csv(file = "data/hk/hk-Rt-kt.csv")
+epicurve <- read_csv(file = "data/hk/hk-epicurves.csv")
+rt_npi_sse <- read_csv(file = "data/hk/hk-Rt-npi-sse.csv")
+fits <- read_csv(file = "data/hk/hk-waves-R-k-bootstrap.csv")
 
-
-rt_npi <- left_join(rtk, npi, by = c("t", "period")) |> 
-  mutate(path = case_when(str_detect(string = period, pattern = "COVID") ~ "COVID",
-                          TRUE ~ "SARS")) |> 
-  mutate(ce = npi_index / 100)
-
-smooth_fct <- 7
-
-rt_npi_sse <- epicurve |> 
-  group_by(t, sse_case_classification, period) |> 
-  count() |> 
-  pivot_wider(names_from = sse_case_classification,
-              values_from = n) |> 
-  janitor::clean_names() |> 
-  mutate(
-    across(everything(), ~replace_na(.x, 0))
-  ) |> 
-  mutate(total = primary_sse_exposure_cases + non_sse_cases + missing_contact_tracing_data + other_sse_associated_cases) |> 
-  mutate(sse_prop = primary_sse_exposure_cases / total,
-         o_sse_prop = other_sse_associated_cases / total,
-         non_sse_prop = non_sse_cases / total) |> 
-  dplyr::select(- c(total, primary_sse_exposure_cases, non_sse_cases, missing_contact_tracing_data, other_sse_associated_cases)) |> 
-  ungroup() |> 
-  group_by(period) |> 
-  mutate(
-    sse_prop = rollapply(sse_prop, 
-                                width = smooth_fct, by = 1, FUN = mean, align = "left", fill = "extend"),
-    o_sse_prop = rollapply(o_sse_prop, 
-                                width = smooth_fct, by = 1, FUN = mean, align = "left", fill = "extend"),
-    non_sse_prop = rollapply(non_sse_prop, 
-                                width = smooth_fct, by = 1, FUN = mean, align = "left", fill = "extend")) |>  
-  left_join(rt_npi, by = c("t", "period")) |> 
-  filter(!is.na(path)) |> 
-  ungroup()
-
-
-
-COVID <- read_rds(file = "code/empirical/finished scripts/data/covid_dated_offspring.rds")
-SARS <- read_rds(file = "code/empirical/finished scripts/data/sars_dated_offspring.rds")
+COVID <- read_rds(file = "data/hk/rds/covid_dated_offspring.rds")
+SARS <- read_rds(file = "data/hk/rds/sars_dated_offspring.rds")
 
 offspring <- list(COVID[[1]], COVID[[2]], SARS[[1]], SARS[[2]])
 offspring_names <- c(names(COVID), names(SARS))
@@ -65,43 +27,9 @@ names(offspring) <- offspring_names
 pal <- RColorBrewer::brewer.pal(12, "Paired") # palette for plots
 pal_epi <- RColorBrewer::brewer.pal(9, "BuGn") # palette for plots
 
-## overall per wave kt 
-fits <- map2(offspring, offspring_names, function(x, y) {
-  
-  tmp <- x |> 
-    mutate(period = case_when(
-      t_inf >= "2020-01-20" & t_inf <= "2020-05-01" ~ "COVID Wave 1",
-      t_inf >= "2020-06-20" & t_inf <= "2020-10-24" ~ "COVID Wave 2",
-      t_inf >= "2020-10-25" ~ "COVID Wave 3",
-      t_inf < "2020-01-01" ~ "SARS Wave",
-      TRUE ~ NA_character_
-    )) |> 
-    filter(!is.na(period)) |> 
-    group_split(period)
-  
-  map(tmp, function(z) {
-    
-    wave <- unique(z$period)
-    
-    fit <- fitdist(z$offspring_count, 
-                   distr = "nbinom", 
-                   start = list(mu = 1, size = 1))
-    
-    
-    boot <- bootdist(fit, parallel = "multicore", ncpus = 16, bootmethod = 'nonparam')
-    
-    tibble(boot$estim) |> 
-      mutate(period = wave, 
-             sensitivity = y)
-    
-  }) |> 
-    rbindlist()
-  
-  
-})
 
-
-pA <- rbindlist(fits) |> (function(x) {
+## Fig.2a - 2c
+pA <- fits |> (function(x) {
   x |> 
     mutate(period = case_when(period == "COVID Wave 1" ~ "C1",
                               period == "COVID Wave 2" ~ "C2",
@@ -138,7 +66,7 @@ pA <- rbindlist(fits) |> (function(x) {
     guides(y = "prism_offset")
   
 }) ()
-pB <- rbindlist(fits) |> (function(x) {
+pB <- fits |> (function(x) {
   x |> 
     mutate(period = case_when(period == "COVID Wave 1" ~ "C1",
                               period == "COVID Wave 2" ~ "C2",
@@ -178,25 +106,13 @@ pB <- rbindlist(fits) |> (function(x) {
 }) ()
 pC <- rtk |> (function(x) {
   
-  # wave_fits <- rbindlist(fits) |> 
-  #   group_by(sensitivity, period) |>
-  #   reframe(mu_median = quantile(mu, 0.5),
-  #           mu_low = quantile(mu, 0.025),
-  #           mu_high = quantile(mu, 0.975),
-  #           size_median = quantile(size, 0.5),
-  #           size_low = quantile(size, 0.05),
-  #           size_high = quantile(size, 0.95)) |> 
-  #   mutate(sensitivity = case_when(str_detect(sensitivity, pattern = "primary") ~ "Sensitivity 1",
-  #                                  TRUE ~ "Sensitivity 2")) 
+ 
   x |> 
     ggplot() +
     geom_hline(yintercept = 1, linetype = 2, alpha = 0.2) +
     geom_violin(aes(x = period, y = kt, colour = sensitivity, fill = sensitivity), scale = "width", width = 0.5, alpha = 0.25, trim = FALSE) +
     geom_boxplot(aes(x = period, y = kt, colour = sensitivity, fill = sensitivity), outlier.shape = NA, alpha = 0.7, width = 0.15, position = position_dodge(0.5)) +
-    # geom_point(data = wave_fits, aes(x = period, y = size_median, colour = sensitivity, fill = sensitivity), shape = 21, position = position_dodge(1.2)) +
-    # geom_linerange(data = wave_fits, aes(x = period, ymax = size_high, ymin = size_low, colour = sensitivity), position = position_dodge(1.2)) +
     scale_y_log10(breaks = c(0.001, 0.01, 0.1, 1.0, 10), labels = c(0.001, 0.01, 0.1, 1.0, 10)) +
-    # scale_x_discrete(labels = c("COVIDWave 1", "COVIDWave 2", "COVIDWave 3", "SARS\nWave")) +
     theme_classic() +
     theme(
       plot.background = element_blank(),
@@ -216,10 +132,7 @@ pC <- rtk |> (function(x) {
   
 }) ()
 
-ABC <- plot_grid(pA, pB, pC, ncol = 3, rel_widths = c(0.75, 0.75 ,2.5), labels = c("a", "b", "c"))
-
-
-### Before Control, After Control. 
+## Fig.2d
 pD <- rt_npi_sse |> (function(x){
   
   xl <- x |> 
@@ -279,24 +192,18 @@ pD <- rt_npi_sse |> (function(x){
     scale_x_log10() +
     scale_y_log10() +
     facet_wrap(~period, ncol = 4, scales = "free") +
-    # coord_cartesian(ylim = c(0.1, 10), xlim = c(0.03, 3)) +
     theme(
       plot.background = element_blank(),
-      # aspect.ratio = 1,
       strip.background = element_blank(),
       legend.position = 'none',
       legend.text.align = 0) +
-    # scale_fill_brewer(palette = 2) +
-    # scale_color_brewer(palette = 2) +
     scale_fill_manual(labels = c("Primary", "Sensitivity"), values = c(pal[10], pal[9])) +
     scale_color_manual(labels = c("Primary", "Sensitivity"), values = c(pal[10], pal[9])) +
     labs(x = expression(paste(italic(k[t]))),
          y = expression(paste(italic(R[t]))),
          fill = "",
          colour = "") +
-    guides(
-      # y = "prism_offset", 
-           colour = 'none')
+    guides(colour = 'none')
   
   
   ### custom legend, lines for primary sensivitiy, circle or diamond more or less
@@ -324,13 +231,7 @@ pD <- rt_npi_sse |> (function(x){
   
 }) ()
 
-
-ABCD <- plot_grid(ABC, pD, ncol = 1, rel_heights = c(2.5, 3), labels = c("", "d"))
-
-
-
-
-### SSE proportion over time
+### Fig.2e 
 pE <- epicurve |> (function(x) {
   
   x |> 
@@ -355,7 +256,7 @@ pE <- epicurve |> (function(x) {
     group_by(period, case_classification) |> 
     mutate(
       proportion = rollapply(proportion, 
-                             width = smooth_fct, by = 1, FUN = mean, align = "left", fill = "extend")) |> 
+                             width = 7, by = 1, FUN = mean, align = "left", fill = "extend")) |> 
     ggplot(aes(x = t, y = proportion, colour = case_classification)) +
     geom_line() +
     scale_x_date(
@@ -383,18 +284,16 @@ pE <- epicurve |> (function(x) {
     guides(y = "prism_offset") 
     
 }) () 
-## SSE Proportion
+
+### Fig.2f
 pF <- rt_npi_sse |>  (function(x) {
   
   gpal <- ghibli::ghibli_palettes$PonyoMedium
   
   x |>
-    # filter(path == "COVID") |>
     ggplot(aes(y = sse_prop, x = kt , colour = sensitivity, fill = sensitivity)) +
-    # geom_point(shape = 21, alpha = 0.4) +
     geom_smooth(method = "lm", alpha = 0.1) + 
     stat_binscatter(bins = 20, geom = "pointrange", alpha = 0.3) +
-    # stat_binscatter(bins = 20, geom = "line") +
     geom_hline(yintercept = 0.5, linetype = 2, alpha = 0.25) +
     geom_vline(xintercept = 1, linetype = 2, alpha = 0.25) +
     theme_classic() +
@@ -418,8 +317,9 @@ pF <- rt_npi_sse |>  (function(x) {
            x = "prism_offset")
   
 }) ()
-#### Control Effort
-pG <- rt_npi |>  (function(x) {
+
+### Fig.2g
+pG <- rt_npi_sse |>  (function(x) {
   
   
   pal_pu <- RColorBrewer::brewer.pal(9, "PuRd") # palette for plots
@@ -427,12 +327,9 @@ pG <- rt_npi |>  (function(x) {
   gpal <- ghibli::ghibli_palettes$PonyoMedium
   
   x |>
-    # filter(path == "COVID") |>
     ggplot(aes(y = ce, x = kt , colour = sensitivity, fill = sensitivity)) +
-    # geom_point(shape = 21, alpha = 0.4) +
     geom_smooth(method = "lm", alpha = 0.1) + 
     stat_binscatter(bins = 20, geom = "pointrange", alpha = 0.3) +
-    # stat_binscatter(bins = 20, geom = "line") +
     geom_hline(yintercept = 0.5, linetype = 2, alpha = 0.25) +
     geom_vline(xintercept = 1, linetype = 2, alpha = 0.25) +
     theme_classic() +
@@ -457,18 +354,16 @@ pG <- rt_npi |>  (function(x) {
   
   
 }) ()
-####### GROWTH RATES
-pH <- rt_npi |>  (function(x) {
+
+### Fig.2h
+pH <- rt_npi_sse |>  (function(x) {
   
   gpal <- ghibli::ghibli_palettes$PonyoMedium
   
   x |>
-    # filter(path == "COVID") |>
     ggplot(aes(y = growth_rate, x = kt , colour = sensitivity, fill = sensitivity)) +
-    # geom_point(shape = 21, alpha = 0.4) +
     geom_smooth(method = "lm", alpha = 0.1) + 
     stat_binscatter(bins = 20, geom = "pointrange", alpha = 0.3) +
-    # stat_binscatter(bins = 20, geom = "line") +
     geom_hline(yintercept = 0, linetype = 2, alpha = 0.25) +
     geom_vline(xintercept = 1, linetype = 2, alpha = 0.25) +
     theme_classic() +
@@ -493,106 +388,16 @@ pH <- rt_npi |>  (function(x) {
   
 }) ()
 
- 
-FGH <- plot_grid(pF, pG, pH, ncol = 3, labels = c("f", "g", "h"))
+## Plot panels
+pABC <- plot_grid(pA, pB, pC, ncol = 3, rel_widths = c(0.75, 0.75 ,2.5), labels = c("a", "b", "c"))
 
-E_FGH <- plot_grid(pE, NULL, FGH, ncol = 3, rel_widths = c(0.8, 0.1, 3), labels = c("e", ""))
+pABCD <- plot_grid(pABC, pD, ncol = 1, rel_heights = c(2.5, 3), labels = c("", "d"))
 
-p2 <- plot_grid(ABCD, NULL, E_FGH, ncol = 1, rel_heights = c(2, 0.1, 2.5))
+pFGH <- plot_grid(pF, pG, pH, ncol = 3, labels = c("f", "g", "h"))
 
-save_plot(plot = p2, filename = "plots/Fig.2.pdf", base_height = 11, base_width = 11)
+pE_FGH <- plot_grid(pE, NULL, pFGH, ncol = 3, rel_widths = c(0.8, 0.1, 3), labels = c("e", ""))
 
+p2 <- plot_grid(pABCD, NULL, pE_FGH, ncol = 1, rel_heights = c(2, 0.1, 2.5))
 
-###### Calculate associations for Supplementary Table
+save_plot(plot = p2, filename = "plots/Fig.2.png", base_height = 11, base_width = 11, dpi = 600)
 
-make_lm_table <- function(model) {
-  
-  # Extract coefficients, standard errors, t-values, and p-values
-  coefficients <- summary(model)$coefficients
-  std_errors <- summary(model)$coefficients[, "Std. Error"]
-  t_values <- coefficients[, "t value"]
-  p_values <- coefficients[, "Pr(>|t|)"]
-  
-  # Combine the extracted elements into a data frame
-  results <- data.frame(
-    Coefficient = rownames(coefficients),
-    Estimate = coefficients[, "Estimate"],
-    Std_Error = std_errors,
-    t_value = t_values,
-    adjR = summary(model)$adj.r.squared,
-    p_value = p_values
-  ) |> 
-    as_tibble()
-  
-  # rownames(results) <- NULL
-  
-  
-  # return the results
-  return(results)
-  
-  
-}
-
-
-
-
-## SSE Proportion
-mSSE_C <- rt_npi_sse_ce |> 
-  group_split(path) |> 
-  (function(x) map(x, function(x) lm(ce ~ sse_prop, data = x))) ()
-
-map(mSSE_C, confint)
-
-map(mSSE_C, make_lm_table) |> 
-  list_rbind() |> 
-  mutate(across(is.numeric, ~round(.x, digits = 3))) |> 
-  filter(Coefficient != "(Intercept)") |> 
-  mutate(Coefficient = "SSE_C", 
-         path = c("COVID-19", "SARS"))
-
-## SSE Proportion
-mSSE <- rt_npi_sse_ce |> 
-  group_split(path, sensitivity) |> 
-  (function(x) map(x, function(x) lm(sse_prop ~ kt, data = x))) ()
-
-mSSE <-
-  map(mSSE, make_lm_table) |> 
-  list_rbind() |> 
-  mutate(across(is.numeric, ~round(.x, digits = 3))) |> 
-  filter(Coefficient != "(Intercept)") |> 
-  mutate(Coefficient = "SSE", 
-         path = c("COVID-19", "COVID-19", "SARS", "SARS"),
-         dataset = c("1", "2", "1", "2"))
-
-### Control effort
-mCt <- rt_npi |> 
-  group_split(path, sensitivity) |> 
-  (function(x) map(x, function(x) lm(ce ~ kt, data = x))) ()
-
-mCt <- map(mCt, make_lm_table) |> 
-  list_rbind() |> 
-  mutate(across(is.numeric, ~round(.x, digits = 3))) |> 
-  filter(Coefficient != "(Intercept)") |> 
-  mutate(Coefficient = "CT", 
-         path = c("COVID-19", "COVID-19", "SARS", "SARS"),
-         dataset = c("1", "2", "1", "2"))
-
-
-### Growth rate
-mRt <- rt_npi |> 
-  group_split(path, sensitivity) |> 
-  (function(x) map(x, function(x) lm(growth_rate ~ kt, data = x))) ()
-
-mRt <- map(mRt, make_lm_table) |> 
-  list_rbind() |> 
-  mutate(across(is.numeric, ~round(.x, digits = 3))) |> 
-  filter(Coefficient != "(Intercept)") |> 
-  mutate(Coefficient = "RT", 
-         path = c("COVID-19", "COVID-19", "SARS", "SARS"),
-         dataset = c("1", "2", "1", "2"))
-
-
-### Supplementary Table 
-bind_rows(mSSE, mCt, mRt) |> 
-  arrange(path, dataset) |> 
-  knitr::kable()
