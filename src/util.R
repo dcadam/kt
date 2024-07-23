@@ -1,6 +1,8 @@
 ## Various Utility functions 
 
-
+custom_min_max_normalize <- function(x, a = 0, b = 1.57) {
+  a + (x - min(x)) * (b - a) / (max(x) - min(x))
+}
 
 make_tbl <- function(input) {
   
