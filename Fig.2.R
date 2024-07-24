@@ -14,10 +14,11 @@ source("src/util.R")
 rtk <- read_csv(file = "data/hk/hk-Rt-kt.csv")
 epicurve <- read_csv(file = "data/hk/hk-epicurves.csv")
 rt_npi_sse <- read_csv(file = "data/hk/hk-Rt-npi-sse.csv")
-fits <- read_csv(file = "data/hk/hk-waves-R-k-bootstrap.csv")
 
+## read raw / outputs
 COVID <- read_rds(file = "data/hk/rds/covid_dated_offspring.rds")
 SARS <- read_rds(file = "data/hk/rds/sars_dated_offspring.rds")
+fits <- read_rds(file = "data/hk/rds/hk-R-k-waves.rds")
 
 offspring <- list(COVID[[1]], COVID[[2]], SARS[[1]], SARS[[2]])
 offspring_names <- c(names(COVID), names(SARS))
@@ -400,4 +401,7 @@ pE_FGH <- plot_grid(pE, NULL, pFGH, ncol = 3, rel_widths = c(0.8, 0.1, 3), label
 p2 <- plot_grid(pABCD, NULL, pE_FGH, ncol = 1, rel_heights = c(2, 0.1, 2.5))
 
 save_plot(plot = p2, filename = "plots/Fig.2.png", base_height = 11, base_width = 11, dpi = 600)
+
+save_plot(plot = p2, filename = "plots/Fig.2.pdf", base_height = 11, base_width = 11)
+
 

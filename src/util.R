@@ -1,5 +1,34 @@
 ## Various Utility functions 
 
+
+make_lm_table <- function(model) {
+  
+  # Extract coefficients, standard errors, t-values, and p-values
+  coefficients <- summary(model)$coefficients
+  std_errors <- summary(model)$coefficients[, "Std. Error"]
+  t_values <- coefficients[, "t value"]
+  p_values <- coefficients[, "Pr(>|t|)"]
+  
+  # Combine the extracted elements into a data frame
+  results <- data.frame(
+    Coefficient = rownames(coefficients),
+    Estimate = coefficients[, "Estimate"],
+    Std_Error = std_errors,
+    t_value = t_values,
+    adjR = summary(model)$adj.r.squared,
+    p_value = p_values
+  ) |> 
+    as_tibble()
+  
+  # rownames(results) <- NULL
+  
+  
+  # return the results
+  return(results)
+  
+  
+}
+
 custom_min_max_normalize <- function(x, a = 0, b = 1.57) {
   a + (x - min(x)) * (b - a) / (max(x) - min(x))
 }
