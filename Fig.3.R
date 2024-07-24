@@ -149,6 +149,7 @@ pC <- rt_kt_est |> (function(x) {
 p3 <- plot_grid(pA, pB, pC, ncol = 1, labels = c("a", "b", "c"), align = 'hv', axis = 'tblr', rel_heights = c(2.5, 2, 2))
 
 save_plot(plot = p3, filename = "plots/Fig.3.png", base_width = 10, base_height = 9, dpi = 600)
+save_plot(plot = p3, filename = "plots/Fig.3.pdf", base_width = 10, base_height = 9)
 
 
 

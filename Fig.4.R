@@ -360,3 +360,4 @@ pF <- bind_rows(
 p4 <- plot_grid(pA, pB, pC, pD, pE, pF, ncol = 3, labels = c("a", "b", "c", "d", "e", "f"), align = "hv", axis = "tblr")
 
 save_plot(plot = p4, filename = "plots/Fig.4.png", base_height = 8, base_width = 10, dpi = 600)
+save_plot(plot = p4, filename = "plots/Fig.4.pdf", base_height = 8, base_width = 10)

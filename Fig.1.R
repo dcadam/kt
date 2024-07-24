@@ -222,4 +222,5 @@ pD <- rtk |> (function(x) {
 p1 <- plot_grid(pA, pB, pC, pD, labels = "auto", ncol = 1, align = "hv", axis = "b")
 
 save_plot(plot = p1, filename = "plots/Fig.1.png", base_height = 13, base_width = 13, dpi = 600)
+save_plot(plot = p1, filename = "plots/Fig.1.pdf", base_height = 13, base_width = 13)
 
