@@ -1,6 +1,12 @@
 ## Various Utility functions 
 
 
+lseq <- function(from, to, length.out) {
+  exp(seq(log(from), log(to), length.out = length.out))
+}
+
+possfitdist <- possibly(.f = fitdist, otherwise = "Error")
+
 make_lm_table <- function(model) {
   
   # Extract coefficients, standard errors, t-values, and p-values
