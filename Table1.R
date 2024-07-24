@@ -8,7 +8,7 @@ library(metasens)
 library(fitdistrplus)
 library(insight)
 
-covid_sars_bc_ac <- read_rds(file = "code/empirical/offspring_control_approx.rds")
+covid_sars_bc_ac <- read_rds(file = "data/hk/rds/hk-offspring-control.rds")
 
 set.seed(123)
 covid_tbl <- covid_sars_bc_ac$covid |> (function(x) {
@@ -122,31 +122,18 @@ sars_tbl <- covid_sars_bc_ac$sars |> (function(x) {
 }) ()
 
 
-
-
-insight::format_table(ci_brackets = c("(",")")) |> 
+format_table(ci_brackets = c("(",")")) |> 
   unite("res", value:CI, sep = " ") |> 
   pivot_wider(names_from = c("var"), values_from = res) |> 
   arrange(dataset, control)
 
 
-
-insight::format_table(ci_brackets = c("(",")")) |> 
+format_table(ci_brackets = c("(",")")) |> 
   unite("res", value:CI, sep = " ") |> 
   pivot_wider(names_from = c("var"), values_from = res) |> 
   arrange(dataset, control)
 
 write_csv(
   x = bind_rows(covid_tbl, sars_tbl),
-  file = "code/empirical/finished scripts/data/control_fits.csv")
-
-fits <- read_csv(file = "code/empirical/finished scripts/data/control_fits.csv")
-
-
-knitr::kable(
-  list(
-    covid_tbl, 
-    sars_tbl
-    ),
-  booktabs = TRUE)
+  file = "output/table1.csv")
 
