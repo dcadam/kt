@@ -3,20 +3,16 @@ library(zoo)
 library(tidyverse)
 library(fitdistrplus)
 library(lubridate)
-library(data.table)
-
-options(show.error.messages = TRUE) ## supress expected MLE failures from console
 
 
-ncpu <- parallel::detectCores()-1
+options(show.error.messages = TRUE) ## suppress expected MLE failures from console
 
-input <- read_rds(file = "code/empirical/finished scripts/data/covid_dated_offspring.rds")
+input <- read_rds(file = "data/hk/rds/sars-dated-offspring.rds")
 
 ### DAILY t = 1
 
-
 output_daily <- map(input, function(x) {
-
+  
   vec_t <- x |> 
     arrange(t_inf) |> 
     pull(t_inf) |> 
@@ -33,13 +29,13 @@ output_daily <- map(input, function(x) {
         set.seed(as.numeric(vec_t[t]))
         
         tmp <- tmp_dt[t_inf == vec_t[t]]
-      
+        
         fit_joint <- fitdist(tmp$offspring_count, 'nbinom')
-
+        
         fit_joint_boot <- fit_joint %>%
           bootdist(parallel = "multicore", ncpus = ncpu, bootmethod = "nonparam")
         
-          est_joint <- tibble(method = "joint", 
+        est_joint <- tibble(method = "joint", 
                             window = "daily",
                             k = unname(fit_joint_boot$estim$size %>%
                                          quantile(0.50, na.rm = TRUE)),
@@ -61,7 +57,7 @@ output_daily <- map(input, function(x) {
                             rt_boot = fit_joint_boot$estim$mu %>% list(),
                             n = nrow(tmp))
         
-      
+        
         
         est <- est_joint
         
@@ -82,7 +78,7 @@ output_daily <- map(input, function(x) {
 })
 
 output_daily <- imap(output_daily, ~ .x |> 
-                   mutate(sensitivity = .y)) |> 
+                       mutate(sensitivity = .y)) |> 
   list_rbind()
 
 
@@ -155,7 +151,7 @@ output_sliding7 <- map(input, function(x) {
 })
 
 output_sliding7 <- imap(output_sliding7, ~ .x |> 
-                       mutate(sensitivity = .y)) |> 
+                          mutate(sensitivity = .y)) |> 
   list_rbind()
 
 
@@ -227,16 +223,15 @@ output_sliding14 <- map(input, function(x) {
 })
 
 output_sliding14 <- imap(output_sliding14, ~ .x |> 
-                          mutate(sensitivity = .y)) |> 
+                           mutate(sensitivity = .y)) |> 
   list_rbind()
-
-
 
 
 ### SAVE DATA
 
 bind_rows(output_daily, output_sliding7, output_sliding14) |> 
-  saveRDS(file = "code/empirical/processed/covid_estimates_nbinom_new.rds")
+  saveRDS(file = "data/hk/rds/hk-covid-Rt-kt-raw.rds")
+
 
 
 ######## MIXTURE ESIMTATION
@@ -248,7 +243,10 @@ bind_rows(output_daily, output_sliding7, output_sliding14) |>
 library(foreach)
 library(doParallel)
 
-cluster <- makeCluster(15) ## start parralel cluster within each epidemic j to control memory
+
+ncpus <- parallel::detectCores()
+
+cluster <- makeCluster(ncpus) ## start parralel cluster within each epidemic j to control memory
 registerDoParallel(cluster)
 
 output_daily <- map(input, function(x) {
@@ -542,9 +540,5 @@ output_sliding14 <- imap(output_sliding14, ~ .x |>
   list_rbind()
 
 
-
 bind_rows(output_daily, output_sliding7, output_sliding14) |> 
-  saveRDS(file = "code/empirical/processed/covid_estimates_mixture.rds")
-
-
-
+  saveRDS(file = "data/hk/rds/hk-covid-Rt-kt-mixture.rds")
