@@ -10,11 +10,11 @@ library(meta)
 
 set.seed(123)
 
-source("code/simulations/util.R")
+source("src/util.R")
 
 
-COVID_dated <- read_rds(file = "code/empirical/finished scripts/data/covid_dated_offspring.rds")
-SARS_dated <- read_rds(file = "code/empirical/finished scripts/data/sars_dated_offspring.rds")
+COVID_dated <- read_rds(file = "data/hk/rds/hk-covid-dated-offspring.rds")
+SARS_dated <- read_rds(file = "data/hk/rds/hk-sars-dated-offspring.rds")
 
 
 c_names <- names(COVID_dated)
@@ -48,7 +48,7 @@ sars_offspring <- rbindlist(SARS_dated) |>
   group_split(dataset, period)
 
 
-#### ZINB by wave
+### Estimate R and k for COVID and SARS using zero-inflated negative binomial (ZINB)
 pstr0 <- c(0, 0.1, 0.2, 0.3)
 
 set.seed(123)
@@ -167,15 +167,10 @@ insight::format_table(ci_brackets = c("(",")")) |>
   arrange(dataset, pstr0)
 
 
-write_csv(out, file = "code/empirical/finished scripts/data/zinb_fits.csv")
+write_csv(out, file = "output/table2.csv")
 
 
-knitr::kable(
-  out,
-  booktabs = TRUE)
-
-
-write_csv(out_p80, file = "code/empirical/finished scripts/data/zinb_p80.csv")
+### Relative heterogeneity (p_80)
 
 bind_rows(
   sars_tbl |> 
