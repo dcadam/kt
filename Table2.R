@@ -11,6 +11,7 @@ library(meta)
 set.seed(123)
 
 source("src/util.R")
+source("src/t20.R")
 
 
 COVID_dated <- read_rds(file = "data/hk/rds/hk-covid-dated-offspring.rds")
@@ -214,4 +215,35 @@ bind_rows(
   unite("res", value:CI, sep = " ") |> 
   pivot_wider(names_from = fit_method, values_from = res)
 ) |> knitr::kable(booktabs = TRUE)
+
+
+### Relative heterogeneity (t_20)
+
+
+t20 <- bind_rows(covid_tbl, sars_tbl) |> 
+  pivot_wider(names_from = "var", values_from = value:CI_high)
+
+
+bind_cols(
+  out,
+  data.table(
+    t20 = map2_dbl(.x = t20$value_R, .y = t20$value_k, function(x, y) {
+      proportion_transmission2(R = x, k = y, prop = 0.2)
+    }),
+    CI_high = map2_dbl(.x = t20$CI_low_R, .y = t20$CI_low_k, function(x, y) {
+      proportion_transmission2(R = x, k = y, prop = 0.2)
+    }),
+    CI_low = map2_dbl(.x = t20$CI_high_R, .y = t20$CI_high_k, function(x, y) {
+      proportion_transmission2(R = x, k = y, prop = 0.2)
+    })
+  ) |> 
+    mutate(across(everything(), ~ round(x = .x*100, digits = 1))) |> 
+    mutate(t20 = paste0(t20, "%")) |> 
+    format_table(ci_brackets = c("(",")"), digits = 1, ci_digits = 1) |> 
+    unite("t20", t20:CI, sep = " ") |> 
+    as_tibble()
+) |> 
+  knitr::kable()
+
+
 
