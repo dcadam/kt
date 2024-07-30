@@ -8,6 +8,9 @@ library(metasens)
 library(fitdistrplus)
 library(insight)
 
+source('src/p80.R')
+source('src/t20.R')
+
 covid_sars_bc_ac <- read_rds(file = "data/hk/rds/hk-offspring-control.rds")
 
 set.seed(123)
@@ -121,19 +124,63 @@ sars_tbl <- covid_sars_bc_ac$sars |> (function(x) {
   
 }) ()
 
-
+## write table
+out <- bind_rows(covid_tbl, sars_tbl) |> 
 format_table(ci_brackets = c("(",")")) |> 
   unite("res", value:CI, sep = " ") |> 
   pivot_wider(names_from = c("var"), values_from = res) |> 
   arrange(dataset, control)
 
 
-format_table(ci_brackets = c("(",")")) |> 
-  unite("res", value:CI, sep = " ") |> 
-  pivot_wider(names_from = c("var"), values_from = res) |> 
+write_csv(out,
+          file = "output/table1.csv")
+
+
+
+#### calculate p80
+
+
+p80 <- bind_rows(covid_tbl, sars_tbl) |> 
+  pivot_wider(names_from = var, values_from = c(value, CI_low, CI_high)) |> 
+  mutate(value = propresponsible(value_R, value_k, 0.8),
+         CI_low = propresponsible(CI_low_R, CI_low_k, 0.8),
+         CI_high = propresponsible(CI_high_R, CI_high_k, 0.8)) |> 
+  dplyr::select(dataset, control, value:CI_high) |> 
+  mutate(across(value:CI_high, ~ round(x = .x*100, digits = 1))) |> 
+  mutate(value = paste0(value, "%")) |> 
+  format_table(ci_brackets = c("(",")"), digits = 1, ci_digits = 1) |> 
+  unite("p80", value:CI, sep = " ") |> 
   arrange(dataset, control)
 
-write_csv(
-  x = bind_rows(covid_tbl, sars_tbl),
-  file = "output/table1.csv")
 
+
+
+#### t20
+
+
+t20 <- bind_rows(covid_tbl, sars_tbl) |> 
+  pivot_wider(names_from = "var", values_from = value:CI_high) |> 
+  arrange(dataset, control)
+
+
+  data.table(
+    dataset = t20$dataset, 
+    control = t20$control,
+    t20 = map2_dbl(.x = t20$value_R, .y = t20$value_k, function(x, y) {
+      proportion_transmission2(R = x, k = y, prop = 0.2)
+    }),
+    CI_high = map2_dbl(.x = t20$CI_low_R, .y = t20$CI_low_k, function(x, y) {
+      proportion_transmission2(R = x, k = y, prop = 0.2)
+    }),
+    CI_low = map2_dbl(.x = t20$CI_high_R, .y = t20$CI_high_k, function(x, y) {
+      proportion_transmission2(R = x, k = y, prop = 0.2)
+    })
+  ) |> 
+      left_join(p80, by = c("dataset", "control")) |> 
+    mutate(across(t20:CI_low, ~ round(x = .x*100, digits = 1))) |> 
+    mutate(t20 = paste0(t20, "%")) |> 
+    format_table(ci_brackets = c("(",")"), digits = 1, ci_digits = 1) |> 
+    unite("t20", t20:CI, sep = " ") |> 
+    as_tibble() |> 
+    knitr::kable()
+  
