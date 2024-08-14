@@ -5,17 +5,25 @@ library(scales)
 library(cowplot)
 library(data.table)
 
+source('src/p80.R')
+
 ##read data 
 epicurve <- read_csv(file = "data/hk/hk-epicurves.csv")
 rtk <- read_csv(file = "data/hk/hk-Rt-kt.csv")
 epinow <- read_csv(file = "data/hk/hk-epinow2.csv")
 
-COVID <- read_rds(file = "data/hk/rds/covid_dated_offspring.rds")
-SARS <- read_rds(file = "data/hk/rds/sars_dated_offspring.rds")
+COVID <- read_rds(file = "data/hk/rds/covid-dated-offspring.rds")
+SARS <- read_rds(file = "data/hk/rds/sars-dated-offspring.rds")
 
 offspring <- list(COVID[[1]], COVID[[2]], SARS[[1]], SARS[[2]])
 offspring_names <- c(names(COVID), names(SARS))
 names(offspring) <- offspring_names
+
+
+rtk <- rtk_new |> 
+  rbindlist() |> 
+  rename(sensitivity = dataset) |> 
+  janitor::clean_names()
 
 
 pal <- RColorBrewer::brewer.pal(12, "Paired") # palette for plots
@@ -43,7 +51,7 @@ pA <- epicurve |> (function(x) {
   
       values = c(pal_epi[[1]], pal_epi[[3]], pal_epi[[5]], pal_epi[[7]])) +
     theme_classic() +
-    theme(aspect.ratio = 0.75,
+    theme(
           legend.position = "bottom",
           strip.background = element_blank(),
           strip.placement = "outside",
@@ -84,7 +92,7 @@ pB <- map2(offspring, offspring_names, function(x, y) {
         scale_x_continuous(limits = c(-0.5,10.5), breaks = c(0:10), labels = c(as.character(0:9), "10+")) +
         scale_y_continuous(limits = c(0,1)) +
         theme_classic() +
-        theme(aspect.ratio = 0.75,
+        theme(
               legend.position = "bottom",
               strip.background = element_blank(),
               strip.placement = "outside",
@@ -96,7 +104,7 @@ pB <- map2(offspring, offspring_names, function(x, y) {
         labs(fill = "Dataset",
              colour = "Dataset",
              x = expression(paste("Number of secondary cases, ", italic(Z))), 
-             y = "Proportion of secondary cases") +
+             y = "Proportion") +
       coord_cartesian(expand = TRUE) +
         facet_wrap(~period, ncol = 4, scales = "free")
       
@@ -121,10 +129,15 @@ pC <- rtk |> (function(x) {
       )
   )
   
-  x |>
-    filter(sensitivity == "Sensitivity 1") |> 
-    mutate(method = "Z") |>
-    bind_rows(epinow) |>
+  
+bind_rows(
+  tibble(t = as.Date(intersect(x$t, epinow$t))) |> 
+    left_join(x[sensitivity == "primary"]) |> 
+    mutate(method = "Z"),
+  tibble(t = as.Date(intersect(x$t, epinow$t))) |> 
+    left_join(epinow)
+  ) |> 
+    filter(!is.na(period)) |> 
     ggplot() +
     geom_point(data = align_df, aes(x = t, y = r), colour = "white") +
     geom_hline(yintercept = 1, alpha = 0.5, linetype = 2) +
@@ -137,7 +150,7 @@ pC <- rtk |> (function(x) {
       minor_breaks = NULL
     ) +
     theme_classic() +
-    theme(aspect.ratio = 0.75,
+    theme(
           legend.position = "bottom",
           strip.background = element_blank(),
           strip.placement = "outside",
@@ -185,7 +198,10 @@ pD <- rtk |> (function(x) {
   )
   
   
-  x |>
+ 
+  
+  x |> 
+    filter(t >= min(align_df$t)) |> 
     ggplot() +
     geom_point(data = align_df, aes(x = t, y = k), colour = "white") +
     geom_hline(yintercept = 1, alpha = 0.5, linetype = 2) +
@@ -199,7 +215,7 @@ pD <- rtk |> (function(x) {
     ) +
     scale_y_log10(labels = trans_format("log10", math_format(10^.x))) +
     theme_classic() +
-    theme(aspect.ratio = 0.75,
+    theme(
           legend.position = "bottom",
           strip.background = element_blank(),
           strip.placement = "outside",
@@ -218,9 +234,68 @@ pD <- rtk |> (function(x) {
     scale_fill_manual(values = c(pal[2], pal[1]), labels = c("Primary", "Sensitivity"))
 })()
 
-# save Fig.1
-p1 <- plot_grid(pA, pB, pC, pD, labels = "auto", ncol = 1, align = "hv", axis = "b")
+## Fig.1e
+pE <- rtk |> (function(x) {
+  align_df <- bind_rows(
+    epicurve |>
+      group_by(period) |>
+      reframe(t = max(t)) |>
+      mutate(
+        k = c(100, 100, 100, 100),
+        r = c(3, 3, 3, 35)
+      ),
+    epicurve |>
+      group_by(period) |>
+      reframe(t = min(t)) |>
+      mutate(
+        k = c(0.005, 0.005, 0.005, 0.005),
+        r = c(0, 0, 0, 0)
+      )
+  )
+  
+  
+  
+  
+  x |> 
+    filter(t >= min(align_df$t)) |> 
+    mutate(p80 = propresponsible(R = rt, k = kt, prop = 0.8),
+           p80_upper = propresponsible(R = rt_upper, k = kt_upper, prop = 0.8),
+           p80_lower = propresponsible(R = rt_lower, k = kt_lower, prop = 0.8)) |> 
+    ggplot() +
+    geom_point(data = align_df, aes(x = t, y = 0.5), colour = "white") +
+    geom_hline(yintercept = 0.8, alpha = 0.5, linetype = 2) +
+    geom_ribbon(aes(x = t, ymax = 1 - p80_upper, ymin = 1 - p80_lower, fill = sensitivity), alpha = 0.1) +
+    geom_line(aes(x = t, y = 1 - p80, colour = sensitivity)) +
+    scale_x_date(
+      name = expression(paste(italic(t))),
+      date_breaks = "1 month",
+      date_labels = "%b %y",
+      minor_breaks = NULL) +
+    scale_y_continuous(limits = c(0.4, 1)) +
+    theme_classic() +
+    theme(
+          legend.position = "bottom",
+          strip.background = element_blank(),
+          strip.placement = "outside",
+          legend.text = element_text(hjust = 0),
+          panel.spacing = unit(1.15, "lines")
+    ) +
+    facet_wrap(~period, ncol = 4, scales = "free") +
+    labs(
+      colour = "Dataset",
+      fill = "Dataset",
+      shape = "",
+      linetype = "",
+      y = expression(paste("Heterogeneity, (1 - ", italic(p[80]), ")"))
+    ) +
+    scale_color_manual(values = c(pal[8], pal[7]), labels = c("Primary", "Sensitivity")) +
+    scale_fill_manual(values = c(pal[8], pal[7]), labels = c("Primary", "Sensitivity"))
+})()
 
-save_plot(plot = p1, filename = "plots/Fig.1.png", base_height = 13, base_width = 13, dpi = 600)
-save_plot(plot = p1, filename = "plots/Fig.1.pdf", base_height = 13, base_width = 13)
+# save Fig.1
+p1 <- plot_grid(pA, pB, pC, pD, pE, labels = "auto", ncol = 1, align = "hv", axis = "b")
+
+save_plot(plot = p1, filename = "plots/Fig.1.png", base_height = 15, base_width = 13, dpi = 600)
+save_plot(plot = p1, filename = "plots/Fig.1.pdf", base_height = 15, base_width = 13)
+
 
