@@ -9,7 +9,10 @@ source('src/p80.R')
 
 ##read data 
 epicurve <- read_csv(file = "data/hk/hk-epicurves.csv")
-rtk <- read_csv(file = "data/hk/hk-Rt-kt.csv")
+rtk <- read_csv(file = "data/hk/hk-Rt-kt.csv") |> 
+  rename(sensitivity = dataset) |> 
+  janitor::clean_names()
+
 epinow <- read_csv(file = "data/hk/hk-epinow2.csv")
 
 COVID <- read_rds(file = "data/hk/rds/covid-dated-offspring.rds")
@@ -19,11 +22,6 @@ offspring <- list(COVID[[1]], COVID[[2]], SARS[[1]], SARS[[2]])
 offspring_names <- c(names(COVID), names(SARS))
 names(offspring) <- offspring_names
 
-
-rtk <- rtk_new |> 
-  rbindlist() |> 
-  rename(sensitivity = dataset) |> 
-  janitor::clean_names()
 
 
 pal <- RColorBrewer::brewer.pal(12, "Paired") # palette for plots
